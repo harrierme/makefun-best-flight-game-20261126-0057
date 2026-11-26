@@ -209,21 +209,22 @@ function step(dt) {
 
 function render() {
   ctx.clearRect(0, 0, CONFIG.viewWidth, CONFIG.viewHeight);
-  world.renderWorld(game.plane, game.rings, game.time);
+  world.renderWorld(game.plane, game.rings, game.time, game.mission, game.phase);
   if (game.phase === PHASE.TITLE && !game.shotTitle) {
     drawTitle(ctx, game);
   } else if (game.phase === PHASE.TITLE && game.shotTitle) {
     // Screenshot pose: the game itself, with a slim banner, HUD lit.
+    // The banner sits at y 128+ so the sun (centre h*0.10) stays clear.
     drawHud(ctx, game);
     ctx.fillStyle = 'rgba(8, 18, 30, 0.55)';
-    ctx.fillRect(0, 96, CONFIG.viewWidth, 64);
+    ctx.fillRect(0, 128, CONFIG.viewWidth, 64);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 34px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SKYCOURIER — ISLAND RUN', CONFIG.viewWidth / 2, 124);
+    ctx.fillText('SKYCOURIER — ISLAND RUN', CONFIG.viewWidth / 2, 156);
     ctx.fillStyle = '#ffd23c';
     ctx.font = '600 17px system-ui, sans-serif';
-    ctx.fillText('Press ENTER to fly · Island Hop · six rings, then land on Runway 18', CONFIG.viewWidth / 2, 150);
+    ctx.fillText('Press ENTER to fly · Island Hop · six rings, then land on Runway 18', CONFIG.viewWidth / 2, 182);
   } else if (game.phase === PHASE.LANDED || game.phase === PHASE.CRASHED) {
     drawHud(ctx, game);
     drawEndScreen(ctx, game);

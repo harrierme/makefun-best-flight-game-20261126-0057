@@ -11,7 +11,7 @@ const FT_PER_M = 3.28084;
 const KT_PER_MS = 1.94384;
 
 function panel(ctx, x, y, w, h, r = 12) {
-  ctx.fillStyle = 'rgba(8, 18, 30, 0.72)';
+  ctx.fillStyle = 'rgba(8, 18, 30, 0.9)';
   ctx.strokeStyle = 'rgba(140, 200, 255, 0.35)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -204,12 +204,17 @@ export function drawHud(ctx, game) {
   readout(ctx, String(Math.round(deg)).padStart(3, '0') + '° ' + compassPoint(deg), W / 2 - 34, 60, 15, '#ffd23c');
 
   // Digital readouts, top right: three columns, right-aligned so the
-  // vertical-speed figure never runs off the edge of the screen.
-  panel(ctx, W - 316, 12, 302, 62);
-  readoutR(ctx, Math.round(plane.y * FT_PER_M) + ' ft', W - 216, 36, 20);
-  labelR(ctx, 'ALT', W - 216, 62);
-  readoutR(ctx, Math.round(plane.speed * KT_PER_MS) + ' kt', W - 116, 36, 20);
-  labelR(ctx, 'SPD', W - 116, 62);
+  // vertical-speed figure never runs off the edge of the screen. Each
+  // column gets a fixed lane wide enough for its longest value: ALT up to
+  // 4 digits ("1234 ft", 8 chars), SPD 3 digits ("113 kt"), V/S 4 digits
+  // with sign ("+1772 fpm", 9 chars) at 20 px monospace (~12 px/char).
+  // Lanes: ALT right edge W-296, SPD W-176, V/S W-26 — at least 40 px
+  // of clear space between neighbouring columns at every value.
+  panel(ctx, W - 402, 12, 388, 62);
+  readoutR(ctx, Math.round(plane.y * FT_PER_M) + ' ft', W - 296, 36, 20);
+  labelR(ctx, 'ALT', W - 296, 62);
+  readoutR(ctx, Math.round(plane.speed * KT_PER_MS) + ' kt', W - 176, 36, 20);
+  labelR(ctx, 'SPD', W - 176, 62);
   // On the ground the vertical speed is zero: the wing is not flying.
   const vs = plane.airborne ? plane.verticalSpeed * FT_PER_M * 60 : 0;
   readoutR(ctx, (vs >= 0 ? '+' : '') + Math.round(vs) + ' fpm', W - 26, 36, 20, vs < -600 ? '#ff8a70' : '#eaf6ff');
@@ -305,16 +310,20 @@ export function drawHud(ctx, game) {
   ctx.fillText('R retry · 1/2/3 mission', W - 30, py + 88);
 
   // --- Centre flash message --------------------------------------------------
+  // High on the screen (H*0.26) and on its own dark pill, so it never sits
+  // on a ring marker or its distance label.
   if (message && time < messageUntil) {
     ctx.save();
     ctx.globalAlpha = Math.min(1, (messageUntil - time) * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = 'rgba(8, 18, 30, 0.6)';
-    ctx.lineWidth = 6;
     ctx.font = '800 44px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.strokeText(message, W / 2, H * 0.34);
-    ctx.fillText(message, W / 2, H * 0.34);
+    const tw = ctx.measureText(message).width;
+    ctx.fillStyle = 'rgba(8, 18, 30, 0.55)';
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - tw / 2 - 26, H * 0.26 - 44, tw + 52, 62, 14);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(message, W / 2, H * 0.26);
     ctx.restore();
   }
   // Pull-up warning when the ground rushes up.
@@ -328,19 +337,19 @@ export function drawHud(ctx, game) {
   }
 }
 
-function centred(ctx, text, y, size, color, weight = 700) {
+function centred(ctx, text, x, y, size, color, weight = 700) {
   ctx.fillStyle = color;
   ctx.font = weight + ' ' + size + 'px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(text, W / 2, y);
+  ctx.fillText(text, x, y);
 }
 
 export function drawTitle(ctx, game) {
   ctx.fillStyle = 'rgba(6, 16, 28, 0.55)';
   ctx.fillRect(0, 0, W, H);
-  centred(ctx, 'SKYCOURIER', 150, 74, '#ffffff', 800);
-  centred(ctx, '— Island Run —', 196, 26, '#ffd23c', 600);
-  centred(ctx, 'A little turboprop, a whole archipelago, and a runway waiting at home.', 232, 19, '#cfe6f7', 500);
+  centred(ctx, 'SKYCOURIER', W / 2, 150, 74, '#ffffff', 800);
+  centred(ctx, '— Island Run —', W / 2, 196, 26, '#ffd23c', 600);
+  centred(ctx, 'A little turboprop, a whole archipelago, and a runway waiting at home.', W / 2, 232, 19, '#cfe6f7', 500);
   // Mission cards.
   const cardW = 330;
   const gap = 24;
@@ -348,6 +357,7 @@ export function drawTitle(ctx, game) {
   let x = (W - total) / 2;
   game.missions.forEach((m, i) => {
     const selected = game.selectedMission === i;
+    const cx = x + cardW / 2; // this card's own centre — never the screen's
     ctx.fillStyle = selected ? 'rgba(255, 182, 60, 0.22)' : 'rgba(8, 18, 30, 0.72)';
     ctx.strokeStyle = selected ? '#ffb63c' : 'rgba(140, 200, 255, 0.35)';
     ctx.lineWidth = selected ? 3 : 1.5;
@@ -355,24 +365,24 @@ export function drawTitle(ctx, game) {
     ctx.roundRect(x, 270, cardW, 190, 14);
     ctx.fill();
     ctx.stroke();
-    centred(ctx, (i + 1) + ' · ' + m.name, 306, 22, '#ffffff', 700);
+    centred(ctx, (i + 1) + ' · ' + m.name, cx, 306, 22, '#ffffff', 700);
     ctx.save();
     ctx.fillStyle = '#9fc6e8';
     ctx.font = '500 14px system-ui, sans-serif';
     ctx.textAlign = 'center';
     wrapText(ctx, m.brief, x + 18, 336, cardW - 36, 20);
     ctx.restore();
-    centred(ctx, m.tagline, 420, 15, '#ffd98a', 600);
+    centred(ctx, m.tagline, cx, 420, 14, '#ffd98a', 600);
     const meta = m.rings + ' rings' + (m.timeLimit ? ' · ' + formatTime(m.timeLimit) + ' limit' : ' · no clock') + (m.wind > 0.5 ? ' · strong wind' : m.wind > 0 ? ' · light wind' : ' · calm');
-    centred(ctx, meta, 446, 13, '#8fb8d8', 500);
+    centred(ctx, meta, cx, 446, 13, '#8fb8d8', 500);
     x += cardW + gap;
   });
-  centred(ctx, 'Press 1 / 2 / 3 to pick a sortie, then ENTER or click to fly.', 510, 20, '#eaf6ff', 600);
-  centred(ctx, 'Take off with full throttle, thread every ring, then land gently on Runway 18.', 542, 16, '#9fc6e8', 500);
-  centred(ctx, 'Arrows / WASD fly · Shift & Ctrl work the throttle · mouse steers · B brakes', 574, 15, '#8fb8d8', 500);
-  centred(ctx, 'Your best score is saved on this machine.', 606, 14, '#8fb8d8', 500);
+  centred(ctx, 'Press 1 / 2 / 3 to pick a sortie, then ENTER or click to fly.', W / 2, 510, 20, '#eaf6ff', 600);
+  centred(ctx, 'Take off with full throttle, thread every ring, then land gently on Runway 18.', W / 2, 542, 16, '#9fc6e8', 500);
+  centred(ctx, 'Arrows / WASD fly · Shift & Ctrl work the throttle · mouse steers · B brakes', W / 2, 574, 15, '#8fb8d8', 500);
+  centred(ctx, 'Your best score is saved on this machine.', W / 2, 606, 14, '#8fb8d8', 500);
   if (game.bestScore > 0) {
-    centred(ctx, 'Best score so far: ' + game.bestScore, 640, 17, '#9fe8b0', 700);
+    centred(ctx, 'Best score so far: ' + game.bestScore, W / 2, 640, 17, '#9fe8b0', 700);
   }
 }
 
@@ -395,22 +405,35 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 
 export function drawEndScreen(ctx, game) {
   const won = game.phase === 'landed';
-  ctx.fillStyle = won ? 'rgba(6, 28, 16, 0.55)' : 'rgba(28, 8, 6, 0.55)';
+  // Heavier veil than before, plus one solid panel behind the whole score
+  // block: the chase-view aircraft sits dead centre (W/2, H*0.60), exactly
+  // where the score lines used to print over its nose and wings.
+  ctx.fillStyle = won ? 'rgba(6, 28, 16, 0.72)' : 'rgba(28, 8, 6, 0.72)';
   ctx.fillRect(0, 0, W, H);
-  centred(ctx, won ? 'MISSION COMPLETE' : 'SORTIE OVER', 170, 56, won ? '#9fe8b0' : '#ff8a70', 800);
-  centred(ctx, won ? 'Wheels down on Runway 18. The courier flies again.' : game.plane.crashReason || 'The sortie ended early.', 214, 22, '#eaf6ff', 600);
-  centred(ctx, 'SCORE  ' + game.score, 290, 40, '#ffd23c', 800);
+  const lines = game.scoreLines.length;
+  const hasBest = game.score > game.bestScore;
+  const blockBottom = 340 + lines * 26 + 14 + 17 + 44 + (hasBest ? 34 : 0) + 17 + 30;
+  ctx.fillStyle = 'rgba(6, 16, 28, 0.85)';
+  ctx.strokeStyle = 'rgba(140, 200, 255, 0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - 330, 118, 660, blockBottom - 118, 16);
+  ctx.fill();
+  ctx.stroke();
+  centred(ctx, won ? 'MISSION COMPLETE' : 'SORTIE OVER', W / 2, 170, 56, won ? '#9fe8b0' : '#ff8a70', 800);
+  centred(ctx, won ? 'Wheels down on Runway 18. The courier flies again.' : game.plane.crashReason || 'The sortie ended early.', W / 2, 214, 22, '#eaf6ff', 600);
+  centred(ctx, 'SCORE  ' + game.score, W / 2, 290, 40, '#ffd23c', 800);
   let y = 340;
   for (const line of game.scoreLines) {
-    centred(ctx, line, y, 17, '#cfe6f7', 500);
+    centred(ctx, line, W / 2, y, 17, '#cfe6f7', 500);
     y += 26;
   }
   y += 14;
-  centred(ctx, 'Rings ' + ringsDoneCount(game.rings) + '/' + game.rings.length + ' · Time ' + formatTime(game.elapsed), y, 17, '#9fc6e8', 600);
+  centred(ctx, 'Rings ' + ringsDoneCount(game.rings) + '/' + game.rings.length + ' · Time ' + formatTime(game.elapsed), W / 2, y, 17, '#9fc6e8', 600);
   y += 44;
-  if (game.score > game.bestScore) {
-    centred(ctx, 'NEW BEST SCORE', y, 20, '#9fe8b0', 800);
+  if (hasBest) {
+    centred(ctx, 'NEW BEST SCORE', W / 2, y, 20, '#9fe8b0', 800);
     y += 34;
   }
-  centred(ctx, 'Press R to fly again · 1 / 2 / 3 to change sortie · T for the title screen', y, 17, '#eaf6ff', 600);
+  centred(ctx, 'Press R to fly again · 1 / 2 / 3 to change sortie · T for the title screen', W / 2, y, 17, '#eaf6ff', 600);
 }

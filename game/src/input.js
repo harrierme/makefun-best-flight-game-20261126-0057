@@ -35,6 +35,7 @@ export function createInput(canvas) {
   };
 
   const down = (e) => {
+    if (e.repeat) return; // holding P must not flutter the pause state
     const field = keyMap[e.code];
     if (field) {
       state[field] = true;

@@ -49,7 +49,7 @@ export const MISSIONS = [
   {
     id: 'island-hop',
     name: 'Island Hop',
-    tagline: 'Six rings over the islands, then bring her home.',
+    tagline: 'Six rings over the islands, then home.',
     rings: 6,
     fuel: 100,
     wind: 0.0,
@@ -60,7 +60,7 @@ export const MISSIONS = [
   {
     id: 'coastal-dash',
     name: 'Coastal Dash',
-    tagline: 'Eight rings, one clock. Fly clean, fly fast.',
+    tagline: 'Eight rings, one clock. Fly fast.',
     rings: 8,
     fuel: 85,
     wind: 0.25,

@@ -57,34 +57,51 @@ export function createWorldRenderer(canvas) {
     };
   }
 
-  function paintSky(plane, time) {
+  function paintSky(plane, time, mission) {
     const w = CONFIG.viewWidth;
     const h = CONFIG.viewHeight;
     const alt = Math.max(0, plane.y);
-    const dusk = 0; // midday light; the storm mission darkens it below
+    // Storm Run flies at dusk under a low grey ceiling; the other sorties
+    // fly at midday. The mission, not a dead constant, picks the palette.
+    const storm = mission && mission.id === 'storm-run';
     const top = ctx.createLinearGradient(0, 0, 0, h);
-    top.addColorStop(0, '#2f6fd0');
-    top.addColorStop(0.45, '#7fb2e8');
-    top.addColorStop(0.62, '#cfe6f7');
-    top.addColorStop(0.63, '#e8f2f8');
-    top.addColorStop(1, '#dcebf5');
+    if (storm) {
+      top.addColorStop(0, '#1d3054');
+      top.addColorStop(0.45, '#4d6d92');
+      top.addColorStop(0.62, '#7e90a2');
+      top.addColorStop(0.63, '#9aa5ac');
+      top.addColorStop(1, '#a9b1b6');
+    } else {
+      top.addColorStop(0, '#2f6fd0');
+      top.addColorStop(0.45, '#7fb2e8');
+      top.addColorStop(0.62, '#cfe6f7');
+      top.addColorStop(0.63, '#e8f2f8');
+      top.addColorStop(1, '#dcebf5');
+    }
     ctx.fillStyle = top;
     ctx.fillRect(0, 0, w, h);
-    // Sun, high and to the right of the nose.
-    const sunX = w * 0.72;
-    const sunY = h * 0.16;
+    // Sun, high in the gap between the mission panel (ends x 264) and the
+    // compass tape (starts x 450) — kept at h*0.10 so the start banner
+    // (y 128+) never clips it, and clear of every top-bar panel.
+    const sunX = w * 0.30;
+    const sunY = h * 0.10;
     const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, 130);
-    glow.addColorStop(0, 'rgba(255, 246, 200, 0.95)');
-    glow.addColorStop(0.25, 'rgba(255, 238, 170, 0.45)');
-    glow.addColorStop(1, 'rgba(255, 238, 170, 0)');
+    if (storm) {
+      glow.addColorStop(0, 'rgba(235, 220, 180, 0.55)');
+      glow.addColorStop(0.25, 'rgba(235, 220, 170, 0.25)');
+      glow.addColorStop(1, 'rgba(235, 220, 170, 0)');
+    } else {
+      glow.addColorStop(0, 'rgba(255, 246, 200, 0.95)');
+      glow.addColorStop(0.25, 'rgba(255, 238, 170, 0.45)');
+      glow.addColorStop(1, 'rgba(255, 238, 170, 0)');
+    }
     ctx.fillStyle = glow;
     ctx.fillRect(sunX - 140, sunY - 140, 280, 280);
-    ctx.fillStyle = '#fff8d8';
+    ctx.fillStyle = storm ? '#e6dcc0' : '#fff8d8';
     ctx.beginPath();
-    ctx.arc(sunX, sunY, 26, 0, Math.PI * 2);
+    ctx.arc(sunX, sunY, storm ? 21 : 26, 0, Math.PI * 2);
     ctx.fill();
     void alt;
-    void dusk;
     void time;
   }
 
@@ -128,12 +145,13 @@ export function createWorldRenderer(canvas) {
     ctx.drawImage(groundCanvas, 0, 0, CONFIG.viewWidth, CONFIG.viewHeight);
   }
 
-  function paintClouds(plane, time) {
+  function paintClouds(plane, time, mission) {
     const cam = cameraFor(plane);
     const w = CONFIG.viewWidth;
     const h = CONFIG.viewHeight;
     const sx = w / gw;
     const sy = h / gh;
+    const storm = mission && mission.id === 'storm-run';
     for (const cloud of scenery.clouds) {
       // Clouds drift slowly with the wind.
       const cx = cloud.x + time * 2;
@@ -143,13 +161,30 @@ export function createWorldRenderer(canvas) {
       const px = p.x * sx;
       const py = p.y * sy;
       const r = Math.max(6, s * 60);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+      ctx.fillStyle = storm ? 'rgba(96, 103, 116, 0.92)' : 'rgba(255, 255, 255, 0.88)';
       for (const [ox, oy, k] of [[-0.9, 0.15, 0.7], [0, 0, 1], [0.9, 0.18, 0.75], [0.3, -0.35, 0.6]]) {
         ctx.beginPath();
         ctx.ellipse(px + ox * r, py + oy * r, r * k, r * k * 0.55, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+  }
+
+  // Thin diagonal rain, Storm Run only. Streaks are placed by index and
+  // fall with time, so the pattern is fixed for a given clock reading.
+  function paintRain(time) {
+    const w = CONFIG.viewWidth;
+    const h = CONFIG.viewHeight;
+    ctx.strokeStyle = 'rgba(205, 218, 232, 0.38)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < 70; i++) {
+      const x = ((i * 97 + 53) % (w + 40)) - 20;
+      const y = ((i * 173 + time * 620) % (h + 40)) - 20;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 7, y + 20);
+    }
+    ctx.stroke();
   }
 
   function paintRings(plane, rings, time) {
@@ -192,11 +227,39 @@ export function createWorldRenderer(canvas) {
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  // Ring distance labels, drawn AFTER the aircraft so a wing can never
+  // clip them. Same projection as paintRings, labels only for rings still
+  // to fly and far enough to read.
+  function paintRingLabels(plane, rings) {
+    const cam = cameraFor(plane);
+    const w = CONFIG.viewWidth;
+    const h = CONFIG.viewHeight;
+    const sx = w / gw;
+    const sy = h / gh;
+    for (const ring of rings) {
+      if (ring.done) continue;
+      const p = project(cam, ring.x, ring.y, ring.z);
+      if (!p) continue;
+      const px = p.x * sx;
+      const py = p.y * sy;
+      const radius = Math.max(3, (CONFIG.ringRadius * p.scale * sx + CONFIG.ringRadius * p.scale * sy) / 2);
+      if (px < -radius * 2 || px > w + radius * 2 || py < -radius * 2 || py > h + radius * 2) continue;
+      // A label that would land behind the glass cockpit panel (bottom
+      // 128 px) is skipped, not half-printed under it.
+      if (py - radius - 10 > h - 140) continue;
       if (p.dist > 30) {
-        ctx.fillStyle = isNext ? '#ffd98a' : '#cfeaff';
+        const isNext = rings.find((x) => !x.done) === ring;
+        const text = Math.round(p.dist) + ' m';
         ctx.font = 'bold 15px system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(Math.round(p.dist) + ' m', px, py - r - 10);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(8, 18, 30, 0.85)';
+        ctx.strokeText(text, px, py - radius - 10);
+        ctx.fillStyle = isNext ? '#ffd98a' : '#cfeaff';
+        ctx.fillText(text, px, py - radius - 10);
       }
     }
   }
@@ -332,13 +395,18 @@ export function createWorldRenderer(canvas) {
   return {
     cameraFor,
     project,
-    renderWorld(plane, rings, time) {
-      paintSky(plane, time);
+    renderWorld(plane, rings, time, mission, phase) {
+      paintSky(plane, time, mission);
       paintGround(plane);
-      paintClouds(plane, time);
+      paintClouds(plane, time, mission);
       paintPlaneShadow(plane);
-      paintRings(plane, rings, time);
+      // Once the sortie is over the course is done: no rings hang in the
+      // sky behind the end screen.
+      const ended = phase === 'landed' || phase === 'crashed';
+      if (!ended) paintRings(plane, rings, time);
       paintPlane(plane, time);
+      if (!ended) paintRingLabels(plane, rings);
+      if (mission && mission.id === 'storm-run') paintRain(time);
     },
   };
 }
